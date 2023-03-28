@@ -5,7 +5,11 @@ import {
   FormGroup,
   ValidatorFn,
   Validators,
+  FormArray,
 } from '@angular/forms';
+import { of } from 'rxjs';
+
+import { debounceTime } from 'rxjs/operators';
 
 import { Customer } from './customer';
 
@@ -39,6 +43,16 @@ function ratingRange(min: number, max: number): ValidatorFn {
 export class CustomerComponent implements OnInit {
   customer = new Customer();
   customerForm: FormGroup;
+  emailMessage: string;
+
+  get addresses(): FormArray {
+    return <FormArray>this.customerForm.get('addresses');
+  }
+
+  private validationMessages = {
+    required: 'Please enter your email address.',
+    email: 'please enter a valid email address',
+  };
 
   constructor(private fb: FormBuilder) {}
 
@@ -53,11 +67,36 @@ export class CustomerComponent implements OnInit {
         },
         { validators: emailMatcher }
       ),
-      sendCatalog: false,
+      sendCatalog: true,
       phone: '',
       notification: 'email',
       rating: [null, ratingRange(1, 10)],
+      addresses: this.fb.array([this.buildAddress()]),
     });
+
+    this.customerForm
+      .get('notification')
+      .valueChanges.subscribe((value) => this.setNotification(value));
+
+    const emailControl = this.customerForm.get('emailGroup.email');
+    emailControl.valueChanges
+      .pipe(debounceTime(1000))
+      .subscribe(() => this.setMessage(emailControl));
+  }
+
+  buildAddress(): FormGroup {
+    return this.fb.group({
+      addressType: 'home',
+      street1: '',
+      street2: '',
+      city: '',
+      state: '',
+      zip: '',
+    });
+  }
+
+  addAddress(): void {
+    this.addresses.push(this.buildAddress());
   }
 
   save(): void {
@@ -82,5 +121,14 @@ export class CustomerComponent implements OnInit {
       phoneControl.clearValidators();
     }
     phoneControl.updateValueAndValidity();
+  }
+
+  setMessage(c: AbstractControl): void {
+    this.emailMessage = '';
+    if ((c.touched || c.dirty) && c.errors) {
+      this.emailMessage = Object.keys(c.errors)
+        .map((key) => this.validationMessages[key])
+        .join(' ');
+    }
   }
 }
